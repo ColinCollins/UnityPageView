@@ -10,24 +10,22 @@ public class PageViewTest : MonoBehaviour
     public Button Left;
     public Button Right;
 
-    //// Start is called before the first frame update
-    //void Start()
-    //{
-    //    for (int i = 0; i < 3; i++) 
-    //    {
-    //        // pageView.AddPage(i);
-    //    }
+	public void Start()
+	{
+		Left.onClick.AddListener(() => {
+			pageView.NextPage();
+		});
 
-    //    // pageView.UpdatePages();
+		Right.onClick.AddListener(() => {
+			pageView.LastPage();
+		});
 
-    //    Left.onClick.AddListener(() => 
-    //    {
-    //        pageView.LastPage();
-    //    });
-
-    //    Right.onClick.AddListener(() => 
-    //    {
-    //        pageView.NextPage();
-    //    });
-    //}
+		pageView.Init();
+		for (int i = 0; i < 3; i++) 
+		{
+			var data = new PageDataHandle();
+			data.Init();
+			pageView.AddPage(data);
+		}
+	}
 }

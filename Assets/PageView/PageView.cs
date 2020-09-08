@@ -13,45 +13,51 @@ using DG.Tweening;
  * 6. 现在的模式并不好，两套并存之后很多内容耦合度很高，建议创建子类，进行代码分离
  */
 
+public enum PageMoveType
+{
+	Next,
+	Last
+}
+
 // not allow slider 
 [RequireComponent(typeof(ScrollRect))]
 public class PageView : MonoBehaviour
 {
 	#region Prefabs
 
-	// for test
+	// Page prefab
 	public Page PagePrefab;
+	
+	// toggle srcoll rect
+	public ScrollRect Toggles;
 
-	public ToggleGroup Toggles;
-	public CustomToggle IndexPointPrefab;
+	// toggle prefab
+	public Toggle IndexPointPrefab;
+
+	private ToggleGroup group;
 
 	#endregion
 
 	#region Setting prop
 
+	// 通常情况下，两个 page 就够用了
+	public int MaxPageCount = 2;
 	public float PageSlideInterval = 0.3f;
-	[HideInInspector]
-	private int PageCount = 2;                // 当前模式为无限限模式时，最多只会产生规定数值 n 个 page，之后可以在多个 page 中进行循环	
-	public bool isInfiniteModel = true;
-	public bool IsInfiniteModel 
+
+	public bool ShowIndexpoints = true;
+	private bool pointTouchable = true;
+	public bool PointTouchable 
 	{
-		get => isInfiniteModel;
-		set 
+		get 
 		{
-			isInfiniteModel = value;
-			if (value)
-			{
-				Switch2InfiniteModel();
-			}
-			else 
-			{
-				ClearAll();
-			}
+			return pointTouchable;
+		}
+
+		set
+		{
+			pointTouchable = value;
 		}
 	}
-
-	public bool ShowIndexPoints = true;
-	public bool IndexPointTouchable = true;
 
 	#endregion
 
@@ -76,45 +82,30 @@ public class PageView : MonoBehaviour
 	public System.Action NextPageCallback;
 	public System.Action LastPageCallback;
 
+	[HideInInspector]
 	public List<Page> Pages;
-	public List<CustomToggle> Points;
+	private List<Toggle> points;
+	private List<PageDataHandle> datas;
 
-	public void Awake()
+	private Queue<PageMoveType> commands;
+	
+	public void Init()
 	{
 		scroll = GetComponent<ScrollRect>();
 		scroll.vertical = false;
 		scroll.horizontal = false;
-
 		content = scroll.content;
-		content.GetComponent<HorizontalLayoutGroup>().enabled = !isInfiniteModel;
-		content.GetComponent<ContentSizeFitter>().enabled = !isInfiniteModel;
 
-		Points = new List<CustomToggle>();
-		Pages = new List<Page>();
-
+		group = Toggles.GetComponent<ToggleGroup>();
 		rectTrans = scroll.GetComponent<RectTransform>();
+
+		Pages = new List<Page>();
+		points = new List<Toggle>();
+		datas = new List<PageDataHandle>();
+		commands = new Queue<PageMoveType>();
+
 		curIndex = 0;
-
 		isMoving = false;
-	}
-
-	public void Start()
-	{
-		if (!isInfiniteModel)
-			return;
-
-		Switch2InfiniteModel();
-	}
-
-	public void Switch2InfiniteModel() 
-	{
-		ShowIndexPoints = false;
-		IndexPointTouchable = false;
-
-		for (int i = 0; i < PageCount; i++)
-		{
-			generatePage();
-		}
 	}
 
 	public Page GetCurPage() 
@@ -126,16 +117,18 @@ public class PageView : MonoBehaviour
 	}
 
 	// 无限模式下无法增加新的页面
-	public Page AddPage()
+	public void AddPage(PageDataHandle data)
 	{
-		if (isInfiniteModel)
-			return null;
+		datas.Add(data);
+		addIndexPoint();
+
+		if (Pages.Count >= MaxPageCount)
+			return;
 
 		generatePage();
-		addIndexPoint();
 		fitContent();
 
-		return Pages[Pages.Count - 1];
+		return;
 	}
 
 	private void generatePage()
@@ -143,189 +136,182 @@ public class PageView : MonoBehaviour
 		var newPage = Instantiate(PagePrefab);
 		newPage.transform.SetParent(content);
 		newPage.transform.localScale = Vector3.one;
-		newPage.GetComponent<RectTransform>().sizeDelta = new Vector2(rectTrans.rect.width, rectTrans.rect.height);
+		newPage.transform.GetComponent<RectTransform>().sizeDelta = new Vector2(rectTrans.rect.width, rectTrans.rect.height);
 
-		if (isInfiniteModel)
-		{
-			newPage.GetComponent<RectTransform>().anchorMax = Vector2.one * 0.5f;
-			newPage.GetComponent<RectTransform>().anchorMin = Vector2.one * 0.5f;
-			newPage.GetComponent<RectTransform>().anchoredPosition3D = new Vector3(Pages.Count * rectTrans.rect.width, 0, 0);
-		}
+		newPage.GetComponent<RectTransform>().anchorMax = Vector2.one * 0.5f;
+		newPage.GetComponent<RectTransform>().anchorMin = Vector2.one * 0.5f;
+		newPage.GetComponent<RectTransform>().anchoredPosition3D = new Vector3(Pages.Count * rectTrans.rect.width, 0, 0);
 
 		Pages.Add(newPage);
+		newPage.UpdateData(datas[Pages.Count - 1]);
 	}
 
 	private void fitContent() 
 	{
-		content.anchoredPosition3D = new Vector3(Pages.Count % 2 != 0 ? Pages.Count / 2 * rectTrans.rect.width : (Pages.Count - 1) / 2f * rectTrans.rect.width, 0, 0);
+		float width = (Pages.Count % 2 != 0 ? Pages.Count : (Pages.Count - 1)) / 2f * rectTrans.rect.width;
+		content.anchoredPosition3D = new Vector3(-width, 0, 0);
 	}
 
-	// 减少 page 数量
-	public void PopPage()
+	// 默认一处当前一个 page
+	public void RemovePageByIndex(int index = -1)
 	{
-		RemovePageByIndex(curIndex);
-		JumpToPageByIndex(curIndex);
-	}
+		if (index > datas.Count || index < 0)
+			index = curIndex;
 
-	public void RemovePageByIndex(int index) 
-	{
-		if (index > Pages.Count || index < 0) 
+		DestroyImmediate(points[index].gameObject);
+		points.RemoveAt(index);
+
+		datas.RemoveAt(index);
+
+		// if data count < max page count, remove page
+		if (datas.Count <= MaxPageCount)
 		{
-			Debug.LogWarning("Array exception");
-			return;
-		}
-
-		if (isInfiniteModel)
-		{
-			// ----------------- temporary ---------------------
-			if (Pages.Count != PageCount)
-			{
-				Destroy(Pages[index].gameObject);
-				Pages.RemoveAt(index);
-			}
-
-			JumpToPageByIndex(curIndex);
-			return;
-		}
-
-		Destroy(Pages[index].gameObject);
-		Pages.RemoveAt(index);
-
-		Points.RemoveAt(index);
-		for (int i = index; i < Points.Count; i++)
-		{
-			Points[i].Index = i;
+			DestroyImmediate(Pages[index].gameObject);
+			Pages.RemoveAt(index);
 		}
 	}
 
 	public void ClearAll() 
 	{
-		Points.ForEach(point => 
+		for (int i = 0; i < points.Count; i++) 
 		{
-			Destroy(point.gameObject);	
-		});
+			DestroyImmediate(points[i].gameObject);
+		}
+		points.Clear();
 
-		Points.Clear();
-
-		Pages.ForEach(page => 
+		for (int j = 0; j < Pages.Count; j++) 
 		{
-			Destroy(page.gameObject);
-		});
-
+			DestroyImmediate(Pages[j].gameObject);
+		}	
 		Pages.Clear();
 
-		curIndex = 0;
+		datas.Clear();
+
+		curIndex = -1;
 	}
 
 	private void addIndexPoint() 
 	{
 		var newPoint = Instantiate(IndexPointPrefab);
-		newPoint.transform.SetParent(Toggles.transform);
-		newPoint.group = Toggles;
+		newPoint.transform.SetParent(Toggles.content.transform);
+		newPoint.group = group;
 		newPoint.transform.localScale = Vector3.one;
 		newPoint.isOn = false;
-		newPoint.manager = this;
-		newPoint.Index = Points.Count;
-		newPoint.interactable = IndexPointTouchable;
-		var child = newPoint.GetComponentsInChildren<Image>();
+		newPoint.interactable = pointTouchable;
+		newPoint.onValueChanged.AddListener(JumpToPageByIndex);
 
-		for (int i = 0; i < child.Length; i++)
-			child[i].enabled = ShowIndexPoints;
+		newPoint.gameObject.SetActive(ShowIndexpoints);
+		points.Add(newPoint);
 
-		Points.Add(newPoint);
+		if (points.Count == 1)
+			newPoint.isOn = true;
 	}
 
-	public void NextPage() 
+	public void NextPage()
 	{
 		if (isMoving)
 			return;
 
-		isMoving = true;
-		int index = curIndex + 1;
-
-		if (index > Pages.Count)
-			return;
-
-		if (isInfiniteModel)
-			moveToPage(index);
-		else
-			JumpToPageByIndex(index);
+		commands.Enqueue(PageMoveType.Next);
+		checkFinished();
 	}
 
-	public void LastPage() 
+	public void LastPage()
 	{
 		if (isMoving)
 			return;
 
-		isMoving = true;
-		int index = curIndex - 1;
-
-		if (index < 0)
-			return;
-
-		if (isInfiniteModel)
-			moveToPage(index, -1);
-		else
-			JumpToPageByIndex(index);
+		commands.Enqueue(PageMoveType.Last);
+		checkFinished();
 	}
 
-	public void JumpToPageByIndex(int index) 
+	public void JumpToPageByIndex(bool isOn)
 	{
-		if (curIndex == index) 
+		if (!isOn || isMoving)
+			return;
+
+		int index = points.FindIndex((t) => { return t.isOn; });
+		int d = index - curIndex;
+
+		for (int i = 0; i < Mathf.Abs(d); i++) 
 		{
-			if (!isInfiniteModel)
-				Points[curIndex].isOn = true;
-
-			return;
+			commands.Enqueue(d > 0 ? PageMoveType.Next : PageMoveType.Last);
 		}
 
-		Points.ForEach(point => 
+		checkFinished();
+	}
+
+	// play animation
+
+	private void moveToPageAnim(int index, PageMoveType type)
+	{
+		isMoving = true;
+		bool isNext = type == PageMoveType.Next;
+
+		Page p1 = Pages[curIndex % 2];
+		Page p2 = Pages[1 - curIndex % 2];
+
+		// update
+		p2.UpdateData(datas[index]);
+
+		RectTransform r1 = p1.GetComponent<RectTransform>();
+		RectTransform r2 = p2.GetComponent<RectTransform>();
+		r2.anchoredPosition = new Vector2((isNext ? 1 : -1) * r1.sizeDelta.x, 0);
+
+		Sequence seq = DOTween.Sequence();
+		seq.Append(r1.DOAnchorPosX((isNext ? -1 : 1) * r1.sizeDelta.x, PageSlideInterval));
+		seq.Join(r2.DOAnchorPosX(0, PageSlideInterval));
+		seq.AppendCallback(() =>
 		{
-			if (point.Index == index)
+			if (isNext && NextPageCallback != null)
 			{
-				point.isOn = true;
-				moveToPage(index);
-				// move to current
-				curIndex = index;
+				NextPageCallback();
 			}
-			else
-				point.isOn = false;
+			else if (!isNext && LastPageCallback != null) 
+			{
+				LastPageCallback();
+			}
+
+			points[index].isOn = true;
+			curIndex = index;
+			checkFinished();
 		});
 	}
 
-	private void moveToPage(int index, float isNext = 1) 
+	private void checkFinished() 
 	{
-		if (isInfiniteModel) 
+		if (commands.Count <= 0) 
 		{
-			var p1 = Pages[curIndex % 2];
-			var p2 = Pages[1 - curIndex % 2];
-
-			var r1 = p1.GetComponent<RectTransform>();
-			var r2 = p2.GetComponent<RectTransform>();
-
-			r2.anchoredPosition = new Vector2(isNext * r2.sizeDelta.x, 0);
-
-			Sequence seq = DOTween.Sequence();
-			seq.Append(r1.DOAnchorPosX(isNext * - r1.sizeDelta.x, PageSlideInterval));
-			seq.Join(r2.DOAnchorPosX(0, PageSlideInterval));
-			seq.AppendCallback(() => 
-			{
-				isMoving = false;
-				curIndex += (int)isNext;
-			});
+			isMoving = false;
+			return;
 		}
-		else 
+			
+		int index = -1;
+		// go ahead
+		PageMoveType type = commands.Dequeue();
+		switch (type) 
 		{
-			var page = Pages[index];
-
-			var tx = (Pages.Count % 2 != 0 ? (Pages.Count / 2 - index) : ((Pages.Count - 1) / 2f - index)) * rectTrans.rect.width;
-			DOTween.To(() => content.anchoredPosition.x, end =>
-			{
-				content.anchoredPosition3D = new Vector3(end, 0, 0);
-			}, tx, Mathf.Clamp(PageSlideInterval * Mathf.Abs(curIndex - index), PageSlideInterval, 1.5f)).OnComplete(() => 
-			{
-				isMoving = false;
-			});
+			case PageMoveType.Next:
+				index = curIndex + 1;
+				if (index >= datas.Count) 
+				{
+					checkFinished();
+					return;
+				}
+				moveToPageAnim(index, type);
+				break;
+			case PageMoveType.Last:
+				index = curIndex - 1;
+				if (index < 0) 
+				{
+					checkFinished();
+					return;
+				}
+				moveToPageAnim(index, type);
+				break;
+			default:
+				Debug.LogError("");
+				break;
 		}
 	}
 }

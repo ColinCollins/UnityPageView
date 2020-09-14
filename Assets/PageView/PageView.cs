@@ -4,15 +4,6 @@ using UnityEngine;
 using UnityEngine.UI;
 using DG.Tweening;
 
-/**
- * 1. 限制数据应该在对接方，那么 PageView 需要做的应该是在 Destroy 时选择是否直接消除对象， pageObj
- * 2. pageObj 需要 OnUpdate 用于及时更新数据
- * 3. 无限模式就固定 page，并且估计需要关闭 content 的 layout 布局保证不会自动定位错误。
- * 4. Page 和 Data 和 point 三者都需要分离，目前无限模式不支持滑动效果，其实目前来看，两个 page 也可以实现功能， 无限模式 indexPoint 不显示
- * 5. Order 模式控制命令进行 
- * 6. 现在的模式并不好，两套并存之后很多内容耦合度很高，建议创建子类，进行代码分离
- */
-
 public enum PageMoveType
 {
 	Next,
@@ -27,14 +18,6 @@ public class PageView : MonoBehaviour
 
 	// Page prefab
 	public Page PagePrefab;
-	
-	// toggle srcoll rect
-	public ScrollRect Toggles;
-
-	// toggle prefab
-	public Toggle IndexPointPrefab;
-
-	private ToggleGroup group;
 
 	#endregion
 
@@ -45,19 +28,6 @@ public class PageView : MonoBehaviour
 	public float PageSlideInterval = 0.3f;
 
 	public bool ShowIndexpoints = true;
-	private bool pointTouchable = true;
-	public bool PointTouchable 
-	{
-		get 
-		{
-			return pointTouchable;
-		}
-
-		set
-		{
-			pointTouchable = value;
-		}
-	}
 
 	#endregion
 
@@ -82,13 +52,16 @@ public class PageView : MonoBehaviour
 	public System.Action NextPageCallback;
 	public System.Action LastPageCallback;
 
+	// points ctrl
+	[HideInInspector]
+	public IndicesCtrl Indices;
+
 	[HideInInspector]
 	public List<Page> Pages;
-	private List<Toggle> points;
 	private List<PageDataHandle> datas;
 
 	private Queue<PageMoveType> commands;
-	
+
 	public void Init()
 	{
 		scroll = GetComponent<ScrollRect>();
@@ -96,19 +69,27 @@ public class PageView : MonoBehaviour
 		scroll.horizontal = false;
 		content = scroll.content;
 
-		group = Toggles.GetComponent<ToggleGroup>();
 		rectTrans = scroll.GetComponent<RectTransform>();
 
 		Pages = new List<Page>();
-		points = new List<Toggle>();
 		datas = new List<PageDataHandle>();
 		commands = new Queue<PageMoveType>();
 
+		Indices = this.GetComponentInChildren<IndicesCtrl>();
+		Indices.Init(this);
+
 		curIndex = 0;
 		isMoving = false;
+
+		for (int i = 0; i < MaxPageCount; i++)
+		{
+			generatePage();
+		}
+
+		fitContent();
 	}
 
-	public Page GetCurPage() 
+	public Page GetCurPage()
 	{
 		if (Pages.Count <= 0)
 			return null;
@@ -116,18 +97,15 @@ public class PageView : MonoBehaviour
 		return Pages[curIndex];
 	}
 
-	// 无限模式下无法增加新的页面
-	public void AddPage(PageDataHandle data)
+	public void AddPages(List<PageDataHandle> datas)
 	{
-		datas.Add(data);
-		addIndexPoint();
+		this.datas = datas;
 
-		if (Pages.Count >= MaxPageCount)
+		if (!ShowIndexpoints)
 			return;
 
-		generatePage();
-		fitContent();
-
+		Indices.AddPoints(datas.Count);
+		Pages[0].UpdateData(datas[Pages.Count - 1]);
 		return;
 	}
 
@@ -143,7 +121,6 @@ public class PageView : MonoBehaviour
 		newPage.GetComponent<RectTransform>().anchoredPosition3D = new Vector3(Pages.Count * rectTrans.rect.width, 0, 0);
 
 		Pages.Add(newPage);
-		newPage.UpdateData(datas[Pages.Count - 1]);
 	}
 
 	private void fitContent() 
@@ -155,29 +132,25 @@ public class PageView : MonoBehaviour
 	// 默认一处当前一个 page
 	public void RemovePageByIndex(int index = -1)
 	{
-		if (index > datas.Count || index < 0)
-			index = curIndex;
+		//if (index > datas.Count || index < 0)
+		//	index = curIndex;
 
-		DestroyImmediate(points[index].gameObject);
-		points.RemoveAt(index);
+		//DestroyImmediate(points[index].gameObject);
+		//points.RemoveAt(index);
 
-		datas.RemoveAt(index);
+		//datas.RemoveAt(index);
 
-		// if data count < max page count, remove page
-		if (datas.Count <= MaxPageCount)
-		{
-			DestroyImmediate(Pages[index].gameObject);
-			Pages.RemoveAt(index);
-		}
+		//// if data count < max page count, remove page
+		//if (datas.Count <= MaxPageCount)
+		//{
+		//	DestroyImmediate(Pages[index].gameObject);
+		//	Pages.RemoveAt(index);
+		//}
 	}
 
 	public void ClearAll() 
 	{
-		for (int i = 0; i < points.Count; i++) 
-		{
-			DestroyImmediate(points[i].gameObject);
-		}
-		points.Clear();
+		Indices.ClearAll();
 
 		for (int j = 0; j < Pages.Count; j++) 
 		{
@@ -188,23 +161,6 @@ public class PageView : MonoBehaviour
 		datas.Clear();
 
 		curIndex = -1;
-	}
-
-	private void addIndexPoint() 
-	{
-		var newPoint = Instantiate(IndexPointPrefab);
-		newPoint.transform.SetParent(Toggles.content.transform);
-		newPoint.group = group;
-		newPoint.transform.localScale = Vector3.one;
-		newPoint.isOn = false;
-		newPoint.interactable = pointTouchable;
-		newPoint.onValueChanged.AddListener(JumpToPageByIndex);
-
-		newPoint.gameObject.SetActive(ShowIndexpoints);
-		points.Add(newPoint);
-
-		if (points.Count == 1)
-			newPoint.isOn = true;
 	}
 
 	public void NextPage()
@@ -230,7 +186,7 @@ public class PageView : MonoBehaviour
 		if (!isOn || isMoving)
 			return;
 
-		int index = points.FindIndex((t) => { return t.isOn; });
+		int index = Indices.Points.Find((t) => { return t.toggle.isOn; }).getIndex();
 		int d = index - curIndex;
 
 		for (int i = 0; i < Mathf.Abs(d); i++) 
@@ -272,7 +228,6 @@ public class PageView : MonoBehaviour
 				LastPageCallback();
 			}
 
-			points[index].isOn = true;
 			curIndex = index;
 			checkFinished();
 		});
@@ -283,6 +238,8 @@ public class PageView : MonoBehaviour
 		if (commands.Count <= 0) 
 		{
 			isMoving = false;
+			// Indices.SwitchOn(curIndex, true);
+
 			return;
 		}
 			

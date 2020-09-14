@@ -21,11 +21,15 @@ public class PageViewTest : MonoBehaviour
 		});
 
 		pageView.Init();
-		for (int i = 0; i < 3; i++) 
+		List<PageDataHandle> pages = new List<PageDataHandle>();
+		for (int i = 0; i < 40; i++) 
 		{
 			var data = new PageDataHandle();
 			data.Init();
-			pageView.AddPage(data);
+			pages.Add(data);
 		}
+
+		pageView.AddPages(pages);
+
 	}
 }

@@ -1,11 +1,14 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-public class Point : MonoBehaviour
+public class Point : MonoBehaviour, IPointerDownHandler
 {
 	private int index = 0;
+
+	public Text numTxt;
 
 	[HideInInspector]
 	public Toggle toggle = null;
@@ -18,13 +21,22 @@ public class Point : MonoBehaviour
 		rect = this.GetComponent<RectTransform>();
 	}
 
-	public void UpdateData(int newIndex)
+	public void UpdateData(int newIndex, bool isOn)
 	{
 		this.index = newIndex;
+		numTxt.text = (index + 1).ToString();
+		toggle.isOn = isOn;
 	}
 
 	public int getIndex() 
 	{
 		return index;
+	}
+
+	public void OnPointerDown(PointerEventData eventData)
+	{
+		// throw new System.NotImplementedException();
+
+		Debug.Log("Point touched");
 	}
 }

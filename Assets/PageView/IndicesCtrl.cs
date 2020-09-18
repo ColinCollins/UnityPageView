@@ -42,7 +42,7 @@ public class IndicesCtrl : MonoBehaviour
 	private float lastPosX = 0;
 
 	private int count = 0;
-	private int curIndex = 0;
+
 	public void Init(PageView ctrl)
 	{
 		owner = ctrl;
@@ -62,13 +62,12 @@ public class IndicesCtrl : MonoBehaviour
 
 	public void AddPoints(int count)
 	{
-		curIndex = 0;
 		this.count = count;
 
 		for (int i = 0; i < Points.Count; i++) 
 		{
 			if (i < count)
-				Points[i].UpdateData(i);
+				Points[i].UpdateData(i, owner.Index == i);
 			else
 				Points[i].gameObject.SetActive(false);
 		}
@@ -110,15 +109,12 @@ public class IndicesCtrl : MonoBehaviour
 		Points.Clear();
 	}
 
-	public void SwitchOn(int index, bool isOn) 
+	public void SwitchOn(int index) 
 	{
-		// content move to 
-		float offset = (index - curIndex) * (ToggleSizeX + OffsetX);
-		// current toggle is on
-		curIndex = index;
-		content.DOAnchorPos3DX(offset, 0.2f * Mathf.Abs(index - curIndex)).OnComplete(() => {
-			Points[Points.Count % index].toggle.isOn = isOn;
-		});
+		int p = index % Points.Count;
+		int lp = Points.FindIndex(x => x.toggle.isOn);
+		Points[p].toggle.isOn = true;
+		content.DOAnchorPosX( - index * (ToggleSizeX + OffsetX), 0.2f);
 	}
 
 	private Vector3 getPositionInScreen(RectTransform point) 
@@ -144,8 +140,8 @@ public class IndicesCtrl : MonoBehaviour
 				{
 					localPos.x += offset;
 					Points[i].rect.localPosition = localPos;
-					int index = Points[i].getIndex() - Points.Count; // update item id
-					Points[i].UpdateData(index);
+					int index = Points[i].getIndex() + Points.Count; // update item id
+					Points[i].UpdateData(index, owner.Index == index);
 				}
 			}
 			else
@@ -154,7 +150,8 @@ public class IndicesCtrl : MonoBehaviour
 				{
 					localPos.x -= offset;
 					Points[i].rect.localPosition = localPos;
-					Points[i].UpdateData(Points[i].getIndex() + Points.Count);
+					int index = Points[i].getIndex() - Points.Count;
+					Points[i].UpdateData(index, owner.Index == index);
 				}
 			}
 		}

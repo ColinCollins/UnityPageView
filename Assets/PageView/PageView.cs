@@ -60,6 +60,7 @@ public class PageView : MonoBehaviour
 	public List<Page> Pages;
 	private List<PageDataHandle> datas;
 
+	// private bool isSingleMove = false;
 	private Queue<PageMoveType> commands;
 
 	public void Init()
@@ -105,10 +106,17 @@ public class PageView : MonoBehaviour
 			return;
 
 		Indices.AddPoints(datas.Count);
-		Pages[0].UpdateData(datas[Pages.Count - 1]);
+
+		for (int i = 0; i < datas.Count; i++) 
+		{
+			if (i >= Pages.Count)
+				break;
+			Pages[i].UpdateData(datas[i]);
+		}
+
 		return;
 	}
-
+	
 	private void generatePage()
 	{
 		var newPage = Instantiate(PagePrefab);
@@ -170,6 +178,8 @@ public class PageView : MonoBehaviour
 
 		commands.Enqueue(PageMoveType.Next);
 		checkFinished();
+
+		// Indices.SwitchOn(Index + 1, true);
 	}
 
 	public void LastPage()
@@ -179,6 +189,8 @@ public class PageView : MonoBehaviour
 
 		commands.Enqueue(PageMoveType.Last);
 		checkFinished();
+
+		// Indices.SwitchOn(Index - 1, true);
 	}
 
 	public void JumpToPageByIndex(bool isOn)
@@ -195,6 +207,8 @@ public class PageView : MonoBehaviour
 		}
 
 		checkFinished();
+
+		Debug.Log(index);
 	}
 
 	// play animation
@@ -205,10 +219,13 @@ public class PageView : MonoBehaviour
 		bool isNext = type == PageMoveType.Next;
 
 		Page p1 = Pages[curIndex % 2];
-		Page p2 = Pages[1 - curIndex % 2];
+		Page p2 = Pages[(curIndex + 1) % 2];
 
 		// update
+		// if (commands)
 		p2.UpdateData(datas[index]);
+		if (commands.Count <= 0)
+		Indices.SwitchOn(index);
 
 		RectTransform r1 = p1.GetComponent<RectTransform>();
 		RectTransform r2 = p2.GetComponent<RectTransform>();
@@ -242,33 +259,39 @@ public class PageView : MonoBehaviour
 
 			return;
 		}
-			
-		int index = -1;
-		// go ahead
+
 		PageMoveType type = commands.Dequeue();
 		switch (type) 
 		{
 			case PageMoveType.Next:
-				index = curIndex + 1;
-				if (index >= datas.Count) 
+				if (!couldNext()) 
 				{
 					checkFinished();
 					return;
 				}
-				moveToPageAnim(index, type);
+				moveToPageAnim(Index + 1, type);
 				break;
 			case PageMoveType.Last:
-				index = curIndex - 1;
-				if (index < 0) 
+				if (!couldLast()) 
 				{
 					checkFinished();
 					return;
 				}
-				moveToPageAnim(index, type);
+				moveToPageAnim(Index - 1, type);
 				break;
 			default:
 				Debug.LogError("");
 				break;
 		}
+	}
+
+	private bool couldNext() 
+	{
+		return Index + 1 < datas.Count;
+	}
+
+	private bool couldLast() 
+	{
+		return Index - 1 >= 0;
 	}
 }

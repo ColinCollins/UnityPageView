@@ -25,8 +25,10 @@ public class PageView : MonoBehaviour
 
 	// 通常情况下，两个 page 就够用了
 	public int MaxPageCount = 2;
+	// 页面移动时间间隔
 	public float PageSlideInterval = 0.3f;
 
+	// 是否显示 toggle points
 	public bool ShowIndexpoints = true;
 
 	#endregion
@@ -37,7 +39,8 @@ public class PageView : MonoBehaviour
 	private RectTransform rectTrans;
 	private RectTransform content;
 
-	private int curIndex = 0;              // 当前页码
+	// 当前页码
+	private int curIndex = 0;             
 	public int Index {
 		get => curIndex;
 		set {
@@ -45,6 +48,7 @@ public class PageView : MonoBehaviour
 		}
 	}
 
+	// 当前页面是否处于移动状态
 	private bool isMoving = false;
 
 	#endregion
@@ -60,9 +64,10 @@ public class PageView : MonoBehaviour
 	public List<Page> Pages;
 	private List<PageDataHandle> datas;
 
-	// private bool isSingleMove = false;
+	// private bool isSingleMove = false; 移动命令队列
 	private Queue<PageMoveType> commands;
 
+	// 初始化 PageView
 	public void Init()
 	{
 		scroll = GetComponent<ScrollRect>();
@@ -90,14 +95,26 @@ public class PageView : MonoBehaviour
 		fitContent();
 	}
 
+
+	// 获取当前的页面对象
 	public Page GetCurPage()
 	{
 		if (Pages.Count <= 0)
 			return null;
 
-		return Pages[curIndex];
+		return Pages[curIndex % Pages.Count];
 	}
 
+	// 获取当前页面数据
+	public PageDataHandle GetCurDatas ()
+	{
+		if (datas == null || datas.Count <= 0)
+			return null;
+
+		return datas[curIndex];
+	}
+
+	// 添加数据，因为默认是无限模式，因此直接添加的数据数量，目前仅能在初始化是添加一次全部数据
 	public void AddPages(List<PageDataHandle> datas)
 	{
 		this.datas = datas;
@@ -131,13 +148,14 @@ public class PageView : MonoBehaviour
 		Pages.Add(newPage);
 	}
 
+	// content 宽度适配
 	private void fitContent() 
 	{
 		float width = (Pages.Count % 2 != 0 ? Pages.Count : (Pages.Count - 1)) / 2f * rectTrans.rect.width;
 		content.anchoredPosition3D = new Vector3(-width, 0, 0);
 	}
 
-	// 默认一处当前一个 page
+	// not finsihed ---------------- but enough
 	public void RemovePageByIndex(int index = -1)
 	{
 		//if (index > datas.Count || index < 0)
@@ -156,6 +174,7 @@ public class PageView : MonoBehaviour
 		//}
 	}
 
+	// 清空全部数据
 	public void ClearAll() 
 	{
 		Indices.ClearAll();
@@ -171,6 +190,7 @@ public class PageView : MonoBehaviour
 		curIndex = -1;
 	}
 
+	// 下一页
 	public void NextPage()
 	{
 		if (isMoving)
@@ -182,6 +202,7 @@ public class PageView : MonoBehaviour
 		// Indices.SwitchOn(Index + 1, true);
 	}
 
+	// 上一页
 	public void LastPage()
 	{
 		if (isMoving)

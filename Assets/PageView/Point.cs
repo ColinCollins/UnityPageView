@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
+// 控制 Toggle point 对象，不需要自定义
 public class Point : MonoBehaviour, IPointerDownHandler
 {
 	private int index = 0;

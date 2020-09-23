@@ -111,6 +111,9 @@ public class IndicesCtrl : MonoBehaviour
 
 	public void SwitchOn(int index) 
 	{
+		if (!owner.ShowIndexpoints)
+			return;
+
 		int p = index % Points.Count;
 		int lp = Points.FindIndex(x => x.toggle.isOn);
 		Points[p].toggle.isOn = true;

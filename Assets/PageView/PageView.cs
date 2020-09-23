@@ -216,7 +216,7 @@ public class PageView : MonoBehaviour
 
 	public void JumpToPageByIndex(bool isOn)
 	{
-		if (!isOn || isMoving)
+		if (!isOn || isMoving || !ShowIndexpoints)
 			return;
 
 		int index = Indices.Points.Find((t) => { return t.toggle.isOn; }).getIndex();
